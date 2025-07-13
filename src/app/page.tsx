@@ -2,6 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type Task = {
   _id: string;
@@ -57,11 +58,11 @@ export default function Home() {
 
   if (!session) {
     return (
-      <main className="p-6 text-center">
+      <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
         <h1 className="text-2xl mb-4">Bem-vindo</h1>
         <p className="mb-4">Faça login para acessar suas tarefas</p>
         <button
-          className="bg-blue-600 text-white px-4 py-2 rounded"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={() => signIn("google")}
         >
           Entrar com Google
@@ -71,19 +72,22 @@ export default function Home() {
   }
 
   return (
-    <main className="p-6 max-w-xl mx-auto">
+    <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Minhas Tarefas</h1>
-        <button className="text-red-500 underline" onClick={() => signOut()}>
-          Sair
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button className="text-red-500 underline" onClick={() => signOut()}>
+            Sair
+          </button>
+        </div>
       </div>
 
       <p className="mb-4">Olá, {session.user?.name}</p>
 
       <div className="flex gap-2 mb-4">
         <input
-          className="border rounded px-2 py-1 flex-1"
+          className="border rounded px-2 py-1 flex-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
           placeholder="Nova tarefa..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -100,7 +104,7 @@ export default function Home() {
         {tasks.map((task) => (
           <li
             key={task._id}
-            className="border rounded px-4 py-2 flex items-center justify-between"
+            className="border rounded px-4 py-2 flex items-center justify-between border-[var(--foreground)]"
           >
             <div className="flex items-center gap-2">
               <input
