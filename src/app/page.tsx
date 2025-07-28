@@ -14,6 +14,14 @@ type Task = {
   dueDate?: string;
 };
 
+type FilterType = "all" | "pending" | "completed";
+
+const filterOptions: { label: string; value: FilterType }[] = [
+  { label: "Todas", value: "all" },
+  { label: "Pendentes", value: "pending" },
+  { label: "Concluídas", value: "completed" },
+];
+
 function formatDateUTC(iso?: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -227,14 +235,10 @@ export default function Home() {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-4">
-        {[
-          { label: "Todas", value: "all" },
-          { label: "Pendentes", value: "pending" },
-          { label: "Concluídas", value: "completed" },
-        ].map((f) => (
+        {filterOptions.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter(f.value as any)}
+            onClick={() => setFilter(f.value)}
             className={`px-3 py-1 rounded-full text-sm ${
               filter === f.value
                 ? "bg-blue-600 text-white"
