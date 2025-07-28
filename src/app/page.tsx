@@ -6,13 +6,31 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
 
+type Recurrence = "none" | "daily" | "weekly" | "monthly";
+
 type Task = {
   _id: string;
   title: string;
   done: boolean;
   createdAt?: string;
   dueDate?: string;
+  recurrence: Recurrence;
 };
+
+type FilterType = "all" | "pending" | "completed";
+
+const filterOptions: { label: string; value: FilterType }[] = [
+  { label: "Todas", value: "all" },
+  { label: "Pendentes", value: "pending" },
+  { label: "Concluídas", value: "completed" },
+];
+
+const recurrenceOptions: { label: string; value: Recurrence }[] = [
+  { label: "Sem recorrência", value: "none" },
+  { label: "Diária", value: "daily" },
+  { label: "Semanal", value: "weekly" },
+  { label: "Mensal", value: "monthly" },
+];
 
 function formatDateUTC(iso?: string) {
   if (!iso) return "";
@@ -24,22 +42,19 @@ function formatDateUTC(iso?: string) {
   });
 }
 
-const filterOptions: { label: string; value: FilterType }[] = [
-  { label: "Todas", value: "all" },
-  { label: "Pendentes", value: "pending" },
-  { label: "Concluídas", value: "completed" },
-];
-
-type FilterType = "all" | "pending" | "completed";
-
 export default function Home() {
   const { data: session, status } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [recurrence, setRecurrence] = useState<Recurrence>("none");
+
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDueDate, setEditingDueDate] = useState("");
+  const [editingRecurrence, setEditingRecurrence] =
+    useState<Recurrence>("none");
+
   const [filter, setFilter] = useState<FilterType>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -48,17 +63,18 @@ export default function Home() {
     if (session) fetchTasks();
   }, [session]);
 
-  const fetchTasks = async (notifyExpired: boolean = true) => {
+  // fetchTasks agora aceita notifyExpired
+  const fetchTasks = async (notifyExpired = true) => {
     try {
       const res = await fetch("/api/tasks");
-      if (!res.ok) throw new Error("Erro ao buscar tarefas");
+      if (!res.ok) throw new Error();
       const data: Task[] = await res.json();
       setTasks(data);
 
       if (notifyExpired) {
         const now = new Date();
         const expired = data.filter(
-          (t) => t.dueDate && new Date(t.dueDate) < now && !t.done
+          (t) => t.dueDate !== undefined && new Date(t.dueDate) < now && !t.done
         );
         if (expired.length > 0) {
           toast.error(`Você tem ${expired.length} tarefa(s) vencida(s)`);
@@ -70,17 +86,20 @@ export default function Home() {
   };
 
   const addTask = async () => {
-    if (!title.trim()) return toast.error("Título não pode ficar vazio");
+    if (!title.trim()) {
+      return toast.error("Título não pode ficar vazio");
+    }
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, dueDate }),
+        body: JSON.stringify({ title, dueDate, recurrence }),
       });
       if (!res.ok) throw new Error();
       toast.success("Tarefa criada!");
       setTitle("");
       setDueDate("");
+      setRecurrence("none");
       await fetchTasks(false);
     } catch {
       toast.error("Erro ao criar tarefa");
@@ -113,7 +132,7 @@ export default function Home() {
       });
       if (!res.ok) throw new Error();
       toast.success("Tarefa removida");
-      fetchTasks();
+      await fetchTasks(false); // <— não notifica vencidas aqui
     } catch {
       toast.error("Erro ao deletar tarefa");
     }
@@ -123,12 +142,16 @@ export default function Home() {
     setEditingTaskId(task._id);
     setEditingTitle(task.title);
     setEditingDueDate(task.dueDate ?? "");
+    setEditingRecurrence(task.recurrence);
   };
+
   const cancelEditing = () => {
     setEditingTaskId(null);
     setEditingTitle("");
     setEditingDueDate("");
+    setEditingRecurrence("none");
   };
+
   const saveEdit = async () => {
     if (!editingTaskId) return;
     if (!editingTitle.trim()) {
@@ -143,6 +166,7 @@ export default function Home() {
           _id: editingTaskId,
           title: editingTitle.trim(),
           dueDate: editingDueDate,
+          recurrence: editingRecurrence,
         }),
       });
       if (!res.ok) throw new Error();
@@ -166,9 +190,11 @@ export default function Home() {
         : b.title.localeCompare(a.title)
     );
 
-  if (status === "loading") return <p className="p-6">Carregando...</p>;
+  if (status === "loading") {
+    return <p className="p-6">Carregando...</p>;
+  }
 
-  if (!session)
+  if (!session) {
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
         <h1 className="text-2xl mb-4">Bem‑vindo</h1>
@@ -180,6 +206,7 @@ export default function Home() {
         </button>
       </main>
     );
+  }
 
   return (
     <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
@@ -203,10 +230,10 @@ export default function Home() {
       {/* Saudação */}
       <p className="mb-4">Olá, {session.user?.name}</p>
 
-      {/* Nova tarefa */}
-      <div className="flex gap-2 mb-4">
+      {/* Nova tarefa + dueDate + recorrência */}
+      <div className="flex gap-2 mb-4 flex-wrap">
         <input
-          className="border rounded px-2 py-1 flex-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
+          className="border rounded px-2 py-1 flex-1 min-w-[8rem] bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
           placeholder="Nova tarefa..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -217,6 +244,17 @@ export default function Home() {
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
         />
+        <select
+          value={recurrence}
+          onChange={(e) => setRecurrence(e.target.value as Recurrence)}
+          className="border rounded px-2 py-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
+        >
+          {recurrenceOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         <button
           className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
           onClick={addTask}
@@ -268,7 +306,7 @@ export default function Home() {
             key={task._id}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
-            {/* Linha principal: título + badge */}
+            {/* Título + badge vencida */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <input
@@ -278,6 +316,7 @@ export default function Home() {
                 />
                 {editingTaskId === task._id ? (
                   <>
+                    {/* inputs de edição inline */}
                     <input
                       className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
                       value={editingTitle}
@@ -295,6 +334,19 @@ export default function Home() {
                       value={editingDueDate}
                       onChange={(e) => setEditingDueDate(e.target.value)}
                     />
+                    <select
+                      value={editingRecurrence}
+                      onChange={(e) =>
+                        setEditingRecurrence(e.target.value as Recurrence)
+                      }
+                      className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
+                    >
+                      {recurrenceOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -354,7 +406,8 @@ export default function Home() {
                     : "text-gray-500"
                 }`}
               >
-                Vence em {formatDateUTC(task.dueDate)}
+                Vence em {formatDateUTC(task.dueDate)}{" "}
+                {task.recurrence !== "none" && `(${task.recurrence})`}
               </div>
             )}
           </li>

@@ -1,14 +1,22 @@
 import mongoose, { Schema } from "mongoose";
 
+const recurrenceEnum = ["none", "daily", "weekly", "monthly"] as const;
+export type Recurrence = (typeof recurrenceEnum)[number];
+
 const TaskSchema = new Schema(
   {
     title: { type: String, required: true },
     done: { type: Boolean, default: false },
     userEmail: { type: String, required: true },
-    dueDate: { type: Date }, // ← campo de vencimento opcional
+    dueDate: { type: Date },
+    recurrence: {
+      type: String,
+      enum: recurrenceEnum,
+      default: "none",
+    },
   },
   {
-    timestamps: true, // já tinha criado em / atualizado em
+    timestamps: true,
   }
 );
 
