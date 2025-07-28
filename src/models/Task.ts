@@ -15,9 +15,7 @@ const TaskSchema = new Schema(
       default: "none",
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 export const Task = mongoose.models.Task || mongoose.model("Task", TaskSchema);
