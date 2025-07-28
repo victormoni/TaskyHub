@@ -1,7 +1,7 @@
-// src/app/page.tsx
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -46,7 +46,7 @@ export default function Home() {
       if (!res.ok) throw new Error("Erro ao buscar tarefas");
       const data: Task[] = await res.json();
       setTasks(data);
-    } catch (err) {
+    } catch {
       toast.error("Não foi possível carregar as tarefas");
     }
   };
@@ -136,7 +136,6 @@ export default function Home() {
     }
   };
 
-  // filtra, busca e ordena
   const displayedTasks = tasks
     .filter((t) => t.title.toLowerCase().includes(searchTerm.toLowerCase()))
     .filter((t) => {
@@ -151,7 +150,7 @@ export default function Home() {
 
   if (status === "loading") return <p className="p-6">Carregando...</p>;
 
-  if (!session) {
+  if (!session)
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
         <h1 className="text-2xl mb-4">Bem‑vindo</h1>
@@ -163,23 +162,29 @@ export default function Home() {
         </button>
       </main>
     );
-  }
 
   return (
     <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
-      {/* cabeçalho */}
+      {/* Cabeçalho */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Minhas Tarefas</h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Link
+            href="/profile"
+            className="text-blue-500 underline hover:text-blue-700"
+          >
+            Perfil
+          </Link>
           <button className="text-red-500 underline" onClick={() => signOut()}>
             Sair
           </button>
         </div>
       </div>
+
       <p className="mb-4">Olá, {session.user?.name}</p>
 
-      {/* formulário tarefa + dueDate */}
+      {/* Formulário tarefa + dueDate */}
       <div className="flex gap-2 mb-4">
         <input
           className="border rounded px-2 py-1 flex-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
@@ -201,7 +206,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* busca e ordenação */}
+      {/* Busca e ordenação */}
       <div className="flex gap-2 mb-4">
         <input
           type="text"
@@ -220,7 +225,7 @@ export default function Home() {
         </select>
       </div>
 
-      {/* filtros */}
+      {/* Filtros */}
       <div className="flex gap-2 mb-4">
         {[
           { label: "Todas", value: "all" },
@@ -241,14 +246,14 @@ export default function Home() {
         ))}
       </div>
 
-      {/* lista de tarefas */}
+      {/* Lista de tarefas */}
       <ul className="space-y-2">
         {displayedTasks.map((task) => (
           <li
             key={task._id}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
-            {/* linha principal */}
+            {/* Linha principal */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <input
@@ -311,7 +316,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* datas */}
+            {/* Datas */}
             {task.createdAt && (
               <div className="mt-1 text-xs text-gray-500">
                 Criada em {formatDateUTC(task.createdAt)}
