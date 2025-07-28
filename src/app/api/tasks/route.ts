@@ -53,3 +53,22 @@ export async function DELETE(req: NextRequest) {
   await Task.findOneAndDelete({ _id, userEmail: session.user?.email }); // só deleta se for dono
   return NextResponse.json({ success: true });
 }
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { _id, title } = await req.json();
+  if (!title || !_id)
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+
+  await connectDB();
+  const updated = await Task.findOneAndUpdate(
+    { _id, userEmail: session.user?.email },
+    { title },
+    { new: true }
+  );
+
+  return NextResponse.json(updated);
+}
