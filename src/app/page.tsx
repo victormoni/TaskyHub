@@ -14,14 +14,6 @@ type Task = {
   dueDate?: string;
 };
 
-type FilterType = "all" | "pending" | "completed";
-
-const filterOptions: { label: string; value: FilterType }[] = [
-  { label: "Todas", value: "all" },
-  { label: "Pendentes", value: "pending" },
-  { label: "Concluídas", value: "completed" },
-];
-
 function formatDateUTC(iso?: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -32,6 +24,14 @@ function formatDateUTC(iso?: string) {
   });
 }
 
+const filterOptions: { label: string; value: FilterType }[] = [
+  { label: "Todas", value: "all" },
+  { label: "Pendentes", value: "pending" },
+  { label: "Concluídas", value: "completed" },
+];
+
+type FilterType = "all" | "pending" | "completed";
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -40,7 +40,7 @@ export default function Home() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDueDate, setEditingDueDate] = useState("");
-  const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -48,12 +48,22 @@ export default function Home() {
     if (session) fetchTasks();
   }, [session]);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (notifyExpired: boolean = true) => {
     try {
       const res = await fetch("/api/tasks");
       if (!res.ok) throw new Error("Erro ao buscar tarefas");
       const data: Task[] = await res.json();
       setTasks(data);
+
+      if (notifyExpired) {
+        const now = new Date();
+        const expired = data.filter(
+          (t) => t.dueDate && new Date(t.dueDate) < now && !t.done
+        );
+        if (expired.length > 0) {
+          toast.error(`Você tem ${expired.length} tarefa(s) vencida(s)`);
+        }
+      }
     } catch {
       toast.error("Não foi possível carregar as tarefas");
     }
@@ -71,7 +81,7 @@ export default function Home() {
       toast.success("Tarefa criada!");
       setTitle("");
       setDueDate("");
-      fetchTasks();
+      await fetchTasks(false);
     } catch {
       toast.error("Erro ao criar tarefa");
     }
@@ -190,9 +200,10 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Saudação */}
       <p className="mb-4">Olá, {session.user?.name}</p>
 
-      {/* Formulário tarefa + dueDate */}
+      {/* Nova tarefa */}
       <div className="flex gap-2 mb-4">
         <input
           className="border rounded px-2 py-1 flex-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
@@ -257,7 +268,7 @@ export default function Home() {
             key={task._id}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
-            {/* Linha principal */}
+            {/* Linha principal: título + badge */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <input
@@ -286,11 +297,20 @@ export default function Home() {
                     />
                   </>
                 ) : (
-                  <span
-                    className={task.done ? "line-through text-gray-400" : ""}
-                  >
-                    {task.title}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={task.done ? "line-through text-gray-400" : ""}
+                    >
+                      {task.title}
+                    </span>
+                    {task.dueDate &&
+                      new Date(task.dueDate) < new Date() &&
+                      !task.done && (
+                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                          Vencida
+                        </span>
+                      )}
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
