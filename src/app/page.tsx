@@ -2,11 +2,12 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
 
 type Recurrence = "none" | "daily" | "weekly" | "monthly";
+type FilterType = "all" | "pending" | "completed";
 
 type Task = {
   _id: string;
@@ -16,8 +17,6 @@ type Task = {
   dueDate?: string;
   recurrence: Recurrence;
 };
-
-type FilterType = "all" | "pending" | "completed";
 
 const filterOptions: { label: string; value: FilterType }[] = [
   { label: "Todas", value: "all" },
@@ -32,13 +31,14 @@ const recurrenceOptions: { label: string; value: Recurrence }[] = [
   { label: "Mensal", value: "monthly" },
 ];
 
-function formatDateUTC(iso?: string) {
+function formatDateTimeLocal(iso?: string) {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("pt-BR", {
+  return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    timeZone: "UTC",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -59,22 +59,25 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  // Batch selection state
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (session) fetchTasks();
   }, [session]);
 
-  // fetchTasks agora aceita notifyExpired
   const fetchTasks = async (notifyExpired = true) => {
     try {
       const res = await fetch("/api/tasks");
       if (!res.ok) throw new Error();
       const data: Task[] = await res.json();
       setTasks(data);
-
       if (notifyExpired) {
         const now = new Date();
         const expired = data.filter(
-          (t) => t.dueDate !== undefined && new Date(t.dueDate) < now && !t.done
+          (t) => t.dueDate && new Date(t.dueDate) < now && !t.done
         );
         if (expired.length > 0) {
           toast.error(`Você tem ${expired.length} tarefa(s) vencida(s)`);
@@ -86,9 +89,7 @@ export default function Home() {
   };
 
   const addTask = async () => {
-    if (!title.trim()) {
-      return toast.error("Título não pode ficar vazio");
-    }
+    if (!title.trim()) return toast.error("Título não pode ficar vazio");
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -132,7 +133,7 @@ export default function Home() {
       });
       if (!res.ok) throw new Error();
       toast.success("Tarefa removida");
-      await fetchTasks(false); // <— não notifica vencidas aqui
+      await fetchTasks(false);
     } catch {
       toast.error("Erro ao deletar tarefa");
     }
@@ -178,6 +179,88 @@ export default function Home() {
     }
   };
 
+  // Batch actions
+  const toggleSelect = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const markSelected = async () => {
+    for (const id of selected) {
+      await fetch("/api/tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: id, done: true }),
+      });
+    }
+    toast.success("Tarefas selecionadas marcadas como feitas");
+    setSelected([]);
+    fetchTasks();
+  };
+
+  const deleteSelected = async () => {
+    for (const id of selected) {
+      await fetch("/api/tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: id }),
+      });
+    }
+    toast.success("Tarefas selecionadas deletadas");
+    setSelected([]);
+    fetchTasks();
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tasks.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const imported: Partial<Task>[] = JSON.parse(text);
+      for (const t of imported) {
+        if (!t.title) continue;
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: t.title,
+            dueDate: t.dueDate,
+            recurrence: t.recurrence,
+          }),
+        });
+        if (res.ok && t.done) {
+          const created = await res.json();
+          await fetch("/api/tasks", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ _id: created._id, done: true }),
+          });
+        }
+      }
+      toast.success("Tarefas importadas!");
+      fetchTasks();
+    } catch {
+      toast.error("Erro ao importar tarefas");
+    }
+  };
+
   const displayedTasks = tasks
     .filter((t) => t.title.toLowerCase().includes(searchTerm.toLowerCase()))
     .filter((t) => {
@@ -190,11 +273,8 @@ export default function Home() {
         : b.title.localeCompare(a.title)
     );
 
-  if (status === "loading") {
-    return <p className="p-6">Carregando...</p>;
-  }
-
-  if (!session) {
+  if (status === "loading") return <p className="p-6">Carregando...</p>;
+  if (!session)
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
         <h1 className="text-2xl mb-4">Bem‑vindo</h1>
@@ -206,7 +286,6 @@ export default function Home() {
         </button>
       </main>
     );
-  }
 
   return (
     <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
@@ -227,8 +306,44 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Saudação */}
       <p className="mb-4">Olá, {session.user?.name}</p>
+
+      {/* Export/Import and Batch Actions */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={handleExport}
+          className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
+        >
+          Exportar JSON
+        </button>
+        <button
+          onClick={handleImportClick}
+          className="bg-yellow-600 text-white px-4 py-1 rounded hover:bg-yellow-700"
+        >
+          Importar JSON
+        </button>
+        <button
+          onClick={markSelected}
+          disabled={selected.length === 0}
+          className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          Marcar selecionadas
+        </button>
+        <button
+          onClick={deleteSelected}
+          disabled={selected.length === 0}
+          className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+        >
+          Deletar selecionadas
+        </button>
+        <input
+          type="file"
+          accept="application/json"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
 
       {/* Nova tarefa + dueDate + recorrência */}
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -239,7 +354,7 @@ export default function Home() {
           onChange={(e) => setTitle(e.target.value)}
         />
         <input
-          type="date"
+          type="datetime-local"
           className="border rounded px-2 py-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
@@ -306,9 +421,14 @@ export default function Home() {
             key={task._id}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
-            {/* Título + badge vencida */}
+            {/* Seleção + Título + badge vencida */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(task._id)}
+                  onChange={() => toggleSelect(task._id)}
+                />
                 <input
                   type="checkbox"
                   checked={task.done}
@@ -316,7 +436,6 @@ export default function Home() {
                 />
                 {editingTaskId === task._id ? (
                   <>
-                    {/* inputs de edição inline */}
                     <input
                       className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
                       value={editingTitle}
@@ -329,7 +448,7 @@ export default function Home() {
                       autoFocus
                     />
                     <input
-                      type="date"
+                      type="datetime-local"
                       className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
                       value={editingDueDate}
                       onChange={(e) => setEditingDueDate(e.target.value)}
@@ -395,19 +514,12 @@ export default function Home() {
             {/* Datas */}
             {task.createdAt && (
               <div className="mt-1 text-xs text-gray-500">
-                Criada em {formatDateUTC(task.createdAt)}
+                Criada em {formatDateTimeLocal(task.createdAt)}
               </div>
             )}
             {task.dueDate && (
-              <div
-                className={`mt-1 text-xs ${
-                  new Date(task.dueDate) < new Date() && !task.done
-                    ? "text-red-500"
-                    : "text-gray-500"
-                }`}
-              >
-                Vence em {formatDateUTC(task.dueDate)}{" "}
-                {task.recurrence !== "none" && `(${task.recurrence})`}
+              <div className="mt-1 text-xs text-gray-500">
+                Vence em {formatDateTimeLocal(task.dueDate)}
               </div>
             )}
           </li>
