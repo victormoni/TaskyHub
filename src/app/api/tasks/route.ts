@@ -17,7 +17,7 @@ interface UpdateTaskBody {
   recurrence?: Recurrence;
 }
 
-// --- GET: lista ---
+// --- GET: list tasks ---
 export async function GET() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -29,7 +29,7 @@ export async function GET() {
   return NextResponse.json(tasks);
 }
 
-// --- POST: cria ---
+// --- POST: create task ---
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(task);
 }
 
-// --- PUT: toggle done + gerar recorrência ---
+// --- PUT: toggle done + create recurrence ---
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -97,7 +97,7 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json(task);
 }
 
-// --- DELETE: apaga ---
+// --- DELETE: delete task ---
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -110,7 +110,7 @@ export async function DELETE(req: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// --- PATCH: atualiza título, data e recorrência ---
+// --- PATCH: update title, data e recurrence ---
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
