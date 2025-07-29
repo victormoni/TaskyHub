@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -247,8 +246,6 @@ export default function Home() {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  const markSelected = () => setShowConfirmMark(true);
-  const deleteSelected = () => setShowConfirmDelete(true);
 
   // Confirmed batch operations
   const handleBatchMark = async () => {
