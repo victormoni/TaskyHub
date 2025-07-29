@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -369,7 +368,6 @@ export default function Home() {
 
       <p className="mb-4">Olá, {session.user?.name}</p>
 
-      {/* Confirm Modals */}
       <ConfirmModal
         isOpen={showConfirmMark}
         title="Confirmar marcação"
