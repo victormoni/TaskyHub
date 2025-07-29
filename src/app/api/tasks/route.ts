@@ -67,14 +67,12 @@ export async function PUT(req: NextRequest) {
   const { _id, done } = (await req.json()) as { _id: string; done: boolean };
   await connectDB();
 
-  // atualiza o status
   const task = await Task.findOneAndUpdate(
     { _id, userEmail: email },
     { done },
     { new: true }
   );
 
-  // se houver recorrência e marcou como feito, cria próxima instância
   if (task && done && task.recurrence !== "none") {
     const nextDate = task.dueDate ? new Date(task.dueDate) : new Date();
     switch (task.recurrence) {
