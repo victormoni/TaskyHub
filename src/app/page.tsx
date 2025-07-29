@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
+import { AnimatePresence, motion } from "framer-motion";
 
 type Recurrence = "none" | "daily" | "weekly" | "monthly";
 type FilterType = "all" | "pending" | "completed";
@@ -43,6 +44,59 @@ function formatDateTimeLocal(iso?: string) {
   });
 }
 
+type ConfirmProps = {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+function ConfirmModal({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: ConfirmProps) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-80"
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.8 }}
+          >
+            <h2 className="text-lg font-bold mb-4">{title}</h2>
+            <p className="mb-6">{message}</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 rounded border hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+              >
+                Confirmar
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -62,6 +116,8 @@ export default function Home() {
 
   const [batchMode, setBatchMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [showConfirmMark, setShowConfirmMark] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,7 +181,7 @@ export default function Home() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const deleteOne = async (task: Task) => {
     try {
       const res = await fetch("/api/tasks", {
         method: "DELETE",
@@ -272,7 +328,7 @@ export default function Home() {
   if (!session) {
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
-        <h1 className="text-2xl mb-4">Bem-vindo</h1>
+        <h1 className="text-2xl mb-4">Bem‑vindo</h1>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={() => signIn("google")}
@@ -313,18 +369,42 @@ export default function Home() {
 
       <p className="mb-4">Olá, {session.user?.name}</p>
 
+      {/* Confirm Modals */}
+      <ConfirmModal
+        isOpen={showConfirmMark}
+        title="Confirmar marcação"
+        message="Deseja marcar as tarefas selecionadas como concluídas?"
+        onConfirm={() => {
+          markSelected();
+          setShowConfirmMark(false);
+          setBatchMode(false);
+        }}
+        onCancel={() => setShowConfirmMark(false)}
+      />
+      <ConfirmModal
+        isOpen={showConfirmDelete}
+        title="Confirmar deleção"
+        message="Deseja deletar as tarefas selecionadas?"
+        onConfirm={() => {
+          deleteSelected();
+          setShowConfirmDelete(false);
+          setBatchMode(false);
+        }}
+        onCancel={() => setShowConfirmDelete(false)}
+      />
+
       {/* Batch Actions */}
       {batchMode && (
         <div className="flex gap-2 mb-4">
           <button
-            onClick={markSelected}
+            onClick={() => setShowConfirmMark(true)}
             disabled={selected.length === 0}
             className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
           >
             Marcar selecionadas
           </button>
           <button
-            onClick={deleteSelected}
+            onClick={() => setShowConfirmDelete(true)}
             disabled={selected.length === 0}
             className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:opacity-50"
           >
@@ -428,8 +508,12 @@ export default function Home() {
       {/* Lista de tarefas */}
       <ul className="space-y-2">
         {displayedTasks.map((task) => (
-          <li
+          <motion.li
             key={task._id}
+            layout
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
             <div className="flex items-center gap-2">
@@ -504,7 +588,7 @@ export default function Home() {
                     ✎
                   </button>
                   <button
-                    onClick={() => deleteTask(task)}
+                    onClick={() => deleteOne(task)}
                     className="text-red-500 hover:text-red-700"
                   >
                     ✕
@@ -522,7 +606,7 @@ export default function Home() {
                 Vence em {formatDateTimeLocal(task.dueDate)}
               </div>
             )}
-          </li>
+          </motion.li>
         ))}
       </ul>
     </main>
