@@ -1,3 +1,4 @@
+// src/app/page.tsx
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -59,7 +60,7 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Batch selection state
+  const [batchMode, setBatchMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +146,6 @@ export default function Home() {
     setEditingDueDate(task.dueDate ?? "");
     setEditingRecurrence(task.recurrence);
   };
-
   const cancelEditing = () => {
     setEditingTaskId(null);
     setEditingTitle("");
@@ -179,13 +179,10 @@ export default function Home() {
     }
   };
 
-  // Batch actions
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: string) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  };
-
   const markSelected = async () => {
     for (const id of selected) {
       await fetch("/api/tasks", {
@@ -198,7 +195,6 @@ export default function Home() {
     setSelected([]);
     fetchTasks();
   };
-
   const deleteSelected = async () => {
     for (const id of selected) {
       await fetch("/api/tasks", {
@@ -263,10 +259,9 @@ export default function Home() {
 
   const displayedTasks = tasks
     .filter((t) => t.title.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter((t) => {
-      if (filter === "all") return true;
-      return filter === "pending" ? !t.done : t.done;
-    })
+    .filter((t) =>
+      filter === "all" ? true : filter === "pending" ? !t.done : t.done
+    )
     .sort((a, b) =>
       sortOrder === "asc"
         ? a.title.localeCompare(b.title)
@@ -274,10 +269,10 @@ export default function Home() {
     );
 
   if (status === "loading") return <p className="p-6">Carregando...</p>;
-  if (!session)
+  if (!session) {
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
-        <h1 className="text-2xl mb-4">Bem‑vindo</h1>
+        <h1 className="text-2xl mb-4">Bem-vindo</h1>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={() => signIn("google")}
@@ -286,6 +281,7 @@ export default function Home() {
         </button>
       </main>
     );
+  }
 
   return (
     <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
@@ -303,12 +299,41 @@ export default function Home() {
           <button className="text-red-500 underline" onClick={() => signOut()}>
             Sair
           </button>
+          <button
+            onClick={() => {
+              setBatchMode(!batchMode);
+              if (batchMode) setSelected([]);
+            }}
+            className="text-sm px-2 py-1 border rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            {batchMode ? "✕ Cancelar seleção" : "✓ Selecionar tarefas"}
+          </button>
         </div>
       </div>
 
       <p className="mb-4">Olá, {session.user?.name}</p>
 
-      {/* Export/Import and Batch Actions */}
+      {/* Batch Actions */}
+      {batchMode && (
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={markSelected}
+            disabled={selected.length === 0}
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            Marcar selecionadas
+          </button>
+          <button
+            onClick={deleteSelected}
+            disabled={selected.length === 0}
+            className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            Deletar selecionadas
+          </button>
+        </div>
+      )}
+
+      {/* Export / Import */}
       <div className="flex gap-2 mb-4">
         <button
           onClick={handleExport}
@@ -321,20 +346,6 @@ export default function Home() {
           className="bg-yellow-600 text-white px-4 py-1 rounded hover:bg-yellow-700"
         >
           Importar JSON
-        </button>
-        <button
-          onClick={markSelected}
-          disabled={selected.length === 0}
-          className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          Marcar selecionadas
-        </button>
-        <button
-          onClick={deleteSelected}
-          disabled={selected.length === 0}
-          className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:opacity-50"
-        >
-          Deletar selecionadas
         </button>
         <input
           type="file"
@@ -421,97 +432,86 @@ export default function Home() {
             key={task._id}
             className="border rounded px-4 py-2 border-[var(--foreground)]"
           >
-            {/* Seleção + Título + badge vencida */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {batchMode && (
                 <input
                   type="checkbox"
                   checked={selected.includes(task._id)}
                   onChange={() => toggleSelect(task._id)}
+                  className="accent-blue-500"
                 />
-                <input
-                  type="checkbox"
-                  checked={task.done}
-                  onChange={() => toggleDone(task)}
-                />
-                {editingTaskId === task._id ? (
-                  <>
-                    <input
-                      className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={saveEdit}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveEdit();
-                        if (e.key === "Escape") cancelEditing();
-                      }}
-                      autoFocus
-                    />
-                    <input
-                      type="datetime-local"
-                      className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
-                      value={editingDueDate}
-                      onChange={(e) => setEditingDueDate(e.target.value)}
-                    />
-                    <select
-                      value={editingRecurrence}
-                      onChange={(e) =>
-                        setEditingRecurrence(e.target.value as Recurrence)
-                      }
-                      className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
-                    >
-                      {recurrenceOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={task.done ? "line-through text-gray-400" : ""}
-                    >
-                      {task.title}
-                    </span>
-                    {task.dueDate &&
-                      new Date(task.dueDate) < new Date() &&
-                      !task.done && (
-                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-                          Vencida
-                        </span>
-                      )}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {editingTaskId === task._id ? (
+              )}
+              <input
+                type="checkbox"
+                checked={task.done}
+                onChange={() => toggleDone(task)}
+              />
+              {editingTaskId === task._id ? (
+                <>
+                  <input
+                    className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={saveEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit();
+                      if (e.key === "Escape") cancelEditing();
+                    }}
+                    autoFocus
+                  />
+                  <input
+                    type="datetime-local"
+                    className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
+                    value={editingDueDate}
+                    onChange={(e) => setEditingDueDate(e.target.value)}
+                  />
+                  <select
+                    value={editingRecurrence}
+                    onChange={(e) =>
+                      setEditingRecurrence(e.target.value as Recurrence)
+                    }
+                    className="border-b border-gray-400 px-1 py-0.5 bg-transparent text-[var(--foreground)]"
+                  >
+                    {recurrenceOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-between">
+                  <span
+                    className={task.done ? "line-through text-gray-400" : ""}
+                  >
+                    {task.title}
+                  </span>
+                  {task.dueDate &&
+                    new Date(task.dueDate) < new Date() &&
+                    !task.done && (
+                      <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                        Vencida
+                      </span>
+                    )}
+                </div>
+              )}
+              {editingTaskId !== task._id && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={cancelEditing}
-                    className="text-gray-500 hover:text-gray-700"
+                    onClick={() => startEditing(task)}
+                    className="text-blue-500 hover:text-blue-700"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => deleteTask(task)}
+                    className="text-red-500 hover:text-red-700"
                   >
                     ✕
                   </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => startEditing(task)}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      onClick={() => deleteTask(task)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-
-            {/* Datas */}
             {task.createdAt && (
               <div className="mt-1 text-xs text-gray-500">
                 Criada em {formatDateTimeLocal(task.createdAt)}
