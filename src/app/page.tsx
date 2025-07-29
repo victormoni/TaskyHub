@@ -1,3 +1,4 @@
+// src/app/page.tsx
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -98,21 +99,26 @@ function ConfirmModal({
 
 export default function Home() {
   const { data: session, status } = useSession();
+
+  // Main state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("none");
 
+  // Inline editing
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDueDate, setEditingDueDate] = useState("");
   const [editingRecurrence, setEditingRecurrence] =
     useState<Recurrence>("none");
 
+  // Filter/search/sort
   const [filter, setFilter] = useState<FilterType>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  // Batch mode
   const [batchMode, setBatchMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [showConfirmMark, setShowConfirmMark] = useState(false);
@@ -120,10 +126,12 @@ export default function Home() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load tasks
   useEffect(() => {
     if (session) fetchTasks();
   }, [session]);
 
+  // Fetch tasks from API
   const fetchTasks = async (notifyExpired = true) => {
     try {
       const res = await fetch("/api/tasks");
@@ -144,6 +152,7 @@ export default function Home() {
     }
   };
 
+  // Add new task
   const addTask = async () => {
     if (!title.trim()) return toast.error("Título não pode ficar vazio");
     try {
@@ -163,14 +172,14 @@ export default function Home() {
     }
   };
 
+  // Toggle done status
   const toggleDone = async (task: Task) => {
     try {
-      const res = await fetch("/api/tasks", {
+      await fetch("/api/tasks", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ _id: task._id, done: !task.done }),
       });
-      if (!res.ok) throw new Error();
       toast.success(
         task.done ? "Tarefa marcada como pendente" : "Tarefa concluída"
       );
@@ -180,14 +189,14 @@ export default function Home() {
     }
   };
 
+  // Delete single task
   const deleteOne = async (task: Task) => {
     try {
-      const res = await fetch("/api/tasks", {
+      await fetch("/api/tasks", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ _id: task._id }),
       });
-      if (!res.ok) throw new Error();
       toast.success("Tarefa removida");
       await fetchTasks(false);
     } catch {
@@ -195,6 +204,7 @@ export default function Home() {
     }
   };
 
+  // Start and cancel inline editing
   const startEditing = (task: Task) => {
     setEditingTaskId(task._id);
     setEditingTitle(task.title);
@@ -204,10 +214,9 @@ export default function Home() {
   const cancelEditing = () => {
     setEditingTaskId(null);
     setEditingTitle("");
-    setEditingDueDate("");
-    setEditingRecurrence("none");
   };
 
+  // Save inline edit
   const saveEdit = async () => {
     if (!editingTaskId) return;
     if (!editingTitle.trim()) {
@@ -215,7 +224,7 @@ export default function Home() {
       return toast.error("Título não pode ficar vazio");
     }
     try {
-      const res = await fetch("/api/tasks", {
+      await fetch("/api/tasks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -225,7 +234,6 @@ export default function Home() {
           recurrence: editingRecurrence,
         }),
       });
-      if (!res.ok) throw new Error();
       toast.success("Tarefa atualizada!");
       cancelEditing();
       fetchTasks();
@@ -234,11 +242,16 @@ export default function Home() {
     }
   };
 
+  // Batch selection handlers
   const toggleSelect = (id: string) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  const markSelected = async () => {
+  const markSelected = () => setShowConfirmMark(true);
+  const deleteSelected = () => setShowConfirmDelete(true);
+
+  // Confirmed batch operations
+  const handleBatchMark = async () => {
     for (const id of selected) {
       await fetch("/api/tasks", {
         method: "PUT",
@@ -246,11 +259,13 @@ export default function Home() {
         body: JSON.stringify({ _id: id, done: true }),
       });
     }
-    toast.success("Tarefas selecionadas marcadas como feitas");
+    toast.success("Tarefas marcadas como feitas");
     setSelected([]);
+    setBatchMode(false);
+    setShowConfirmMark(false);
     fetchTasks();
   };
-  const deleteSelected = async () => {
+  const handleBatchDelete = async () => {
     for (const id of selected) {
       await fetch("/api/tasks", {
         method: "DELETE",
@@ -258,11 +273,14 @@ export default function Home() {
         body: JSON.stringify({ _id: id }),
       });
     }
-    toast.success("Tarefas selecionadas deletadas");
+    toast.success("Tarefas deletadas");
     setSelected([]);
+    setBatchMode(false);
+    setShowConfirmDelete(false);
     fetchTasks();
   };
 
+  // Export / Import
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(tasks, null, 2)], {
       type: "application/json",
@@ -274,11 +292,7 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
+  const handleImportClick = () => fileInputRef.current?.click();
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -312,6 +326,7 @@ export default function Home() {
     }
   };
 
+  // Filter, search, sort
   const displayedTasks = tasks
     .filter((t) => t.title.toLowerCase().includes(searchTerm.toLowerCase()))
     .filter((t) =>
@@ -327,7 +342,7 @@ export default function Home() {
   if (!session) {
     return (
       <main className="p-6 text-center bg-[var(--background)] text-[var(--foreground)] min-h-screen">
-        <h1 className="text-2xl mb-4">Bem‑vindo</h1>
+        <h1 className="text-2xl mb-4">Bem-vindo</h1>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={() => signIn("google")}
@@ -340,7 +355,7 @@ export default function Home() {
 
   return (
     <main className="p-6 max-w-xl mx-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
-      {/* Cabeçalho */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Minhas Tarefas</h1>
         <div className="flex items-center gap-2">
@@ -351,45 +366,61 @@ export default function Home() {
           >
             Perfil
           </Link>
-          <button className="text-red-500 underline" onClick={() => signOut()}>
+          <button onClick={() => signOut()} className="text-red-500 underline">
             Sair
-          </button>
-          <button
-            onClick={() => {
-              setBatchMode(!batchMode);
-              if (batchMode) setSelected([]);
-            }}
-            className="text-sm px-2 py-1 border rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-          >
-            {batchMode ? "✕ Cancelar seleção" : "✓ Selecionar tarefas"}
           </button>
         </div>
       </div>
 
       <p className="mb-4">Olá, {session.user?.name}</p>
 
+      {/* Confirm Modals */}
       <ConfirmModal
         isOpen={showConfirmMark}
         title="Confirmar marcação"
         message="Deseja marcar as tarefas selecionadas como concluídas?"
-        onConfirm={() => {
-          markSelected();
-          setShowConfirmMark(false);
-          setBatchMode(false);
-        }}
+        onConfirm={handleBatchMark}
         onCancel={() => setShowConfirmMark(false)}
       />
       <ConfirmModal
         isOpen={showConfirmDelete}
         title="Confirmar deleção"
         message="Deseja deletar as tarefas selecionadas?"
-        onConfirm={() => {
-          deleteSelected();
-          setShowConfirmDelete(false);
-          setBatchMode(false);
-        }}
+        onConfirm={handleBatchDelete}
         onCancel={() => setShowConfirmDelete(false)}
       />
+
+      {/* Export / Import / Select */}
+      <div className="flex gap-2 mb-4 items-center">
+        <button
+          onClick={handleExport}
+          className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
+        >
+          Exportar JSON
+        </button>
+        <button
+          onClick={handleImportClick}
+          className="bg-yellow-600 text-white px-4 py-1 rounded hover:bg-yellow-700"
+        >
+          Importar JSON
+        </button>
+        <button
+          onClick={() => {
+            setBatchMode(!batchMode);
+            if (batchMode) setSelected([]);
+          }}
+          className="text-sm px-2 py-1 border rounded hover:bg-gray-200 dark:hover:bg-gray-700 ml-auto"
+        >
+          {batchMode ? "✕ Cancelar seleção" : "✓ Selecionar tarefas"}
+        </button>
+        <input
+          type="file"
+          accept="application/json"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
 
       {/* Batch Actions */}
       {batchMode && (
@@ -411,37 +442,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* Export / Import */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={handleExport}
-          className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
-        >
-          Exportar JSON
-        </button>
-        <button
-          onClick={handleImportClick}
-          className="bg-yellow-600 text-white px-4 py-1 rounded hover:bg-yellow-700"
-        >
-          Importar JSON
-        </button>
+      {/* New Task Input */}
+      <div className="flex items-center gap-2 mb-2">
         <input
-          type="file"
-          accept="application/json"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </div>
-
-      {/* Nova tarefa + dueDate + recorrência */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <input
-          className="border rounded px-2 py-1 flex-1 min-w-[8rem] bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
+          className="border rounded px-2 py-1 flex-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
           placeholder="Nova tarefa..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
+        <button
+          onClick={addTask}
+          className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+        >
+          Adicionar
+        </button>
+      </div>
+      <div className="flex gap-2 mb-4">
         <input
           type="datetime-local"
           className="border rounded px-2 py-1 bg-transparent text-[var(--foreground)] border-[var(--foreground)]"
@@ -459,15 +475,9 @@ export default function Home() {
             </option>
           ))}
         </select>
-        <button
-          className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
-          onClick={addTask}
-        >
-          Adicionar
-        </button>
       </div>
 
-      {/* Busca e ordenação */}
+      {/* Search and Sort */}
       <div className="flex gap-2 mb-4">
         <input
           type="text"
@@ -486,7 +496,7 @@ export default function Home() {
         </select>
       </div>
 
-      {/* Filtros */}
+      {/* Filters */}
       <div className="flex gap-2 mb-4">
         {filterOptions.map((f) => (
           <button
@@ -503,7 +513,7 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Lista de tarefas */}
+      {/* Task List */}
       <ul className="space-y-2">
         {displayedTasks.map((task) => (
           <motion.li
